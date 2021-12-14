@@ -1,5 +1,5 @@
 <script>
-var $hostname = window.location.hostname,
+var $hostname = String(window.location.hostname),
     cookie_params = ['source', 'medium', 'campaign']; // there are also [... 'term', 'content'] !commented
 
 function crumbleCookie(a) {
