@@ -1,4 +1,3 @@
-<script>
 var $hostname = String(window.location.hostname),
     cookie_params = ['source', 'medium', 'campaign']; // there are also [... 'term', 'content'] !commented
 
@@ -222,5 +221,3 @@ if (typeof session2 != 'undefined') {
 var utmSourceFirstVisit = String(session.source);
 var utmMediumFirstVisit = String(session.medium);
 var utmCampaignFirstVisit = String(session.campaign);
-
-</script>
