@@ -103,7 +103,7 @@ function getParam(s, q) {
 
 function calculateTrafficSource() {
     var source='', medium='', campaign=''; //, term='', content='';
-    var search_engines = [['bing', 'q'], ['google', 'q'], ['yahoo', 'q'], ['baidu', 'q'], ['yandex', 'q'], ['ask', 'q'], ['libero.it', 'qs'], ['virgilio.it', 'q']]; //List of search engines
+    var search_engines = [['bing', 'q'], ['google', 'q'], ['duckduckgo', 'q'], ['yahoo', 'q'], ['baidu', 'q'], ['yandex', 'q'], ['ask', 'q'], ['libero.it', 'qs'], ['virgilio.it', 'q']]; //List of search engines
     var socials = [['facebook'], ['twitter'], ['instagram'], ['flickr'], ['tumblr'], ['vimeo'], ['pinterest']]; // List of socials ['plus.google'], ['plus.url.google'],
     var ref = document.referrer;
     ref = ref.substr(ref.indexOf('//')+2);
