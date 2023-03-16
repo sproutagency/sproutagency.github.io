@@ -1,223 +1,165 @@
-var $hostname = String(window.location.hostname),
-    cookie_params = ['source', 'medium', 'campaign']; // there are also [... 'term', 'content'] !commented
+// Define constants
+const hostname = String(window.location.hostname);
+const cookieParams = ['source', 'medium', 'campaign', 'term'];
 
-function crumbleCookie(a) {
-    for (var d = document.cookie.split(";"), c = {}, b = 0; b < d.length; b++) {
-        var e = d[b].substring(0, d[b].indexOf("=")).trim(),
-            i = d[b].substring(d[b].indexOf("=") + 1, d[b].length).trim();
-        c[e] = i;
-    }
-    if (a) return c[a] ? c[a] : null;
-    return c;
-}
+// Parse cookies and return an object or a specific value
+function parseCookies(cookieName) {
+    const cookiesArray = document.cookie.split(";");
+    let cookiesObj = {};
 
-function bakeCookie(a, d, c, b, e, i) {
-    var j = new Date();
-    j.setTime(j.getTime());
-    c && (c *= 864E5);
-    j = new Date(j.getTime() + c);
-    document.cookie = a + "=" + escape(d) + (c ? ";expires=" + j.toGMTString() : "") + (b ? ";path=" + b : "") + (e ? ";domain=" + e : "") + (i ? ";secure" : "");
-}
-
-/**
- * Write cookie as url string
- * use getTrafficSource() and bakeCookie()
- *
- * @param n Name of cookie to write
- *
- * @return void
- */
-function writeLogic(n) {
-    var a = getTrafficSource(n, $hostname);
-
-    a = a.replace(/\|{2,}/g, "|");
-    a = a.replace(/^\|/, "");
-    a = unescape(a);
-
-    bakeCookie(n, a, 182, "/", "", ""); //Cookie expiration sets to 182 days
-}
-
-/**
- * Read cookie saved as url and return object with key=>value
- *
- * @param n Name of cookie to read
- *
- * @returns object key=>value object of cookie
- */
-function readLogic(n) {
-    var cookie_string = crumbleCookie()[n], cookie_obj = {}, param;
-
-    for (var key in cookie_params) {
-        param = cookie_params[key];
-        cookie_obj[param] = getParam('?' + decodeURIComponent(cookie_string), param);
+    for (let cookie of cookiesArray) {
+        const [key, value] = cookie.trim().split("=");
+        cookiesObj[key] = value;
     }
 
-    return cookie_obj;
+    return cookieName ? cookiesObj[cookieName] || null : cookiesObj;
 }
 
+// Set a new cookie
+function setCookie(name, value, days, path, domain, secure) {
+    const expirationDate = new Date();
+    expirationDate.setTime(expirationDate.getTime() + (days * 864E5));
+    const expires = days ? ";expires=" + expirationDate.toGMTString() : "";
+    const cookiePath = path ? ";path=" + path : "";
+    const cookieDomain = domain ? ";domain=" + domain : "";
+    const cookieSecure = secure ? ";secure" : "";
+    
+    document.cookie = `${name}=${encodeURIComponent(value)}${expires}${cookiePath}${cookieDomain}${cookieSecure}`;
+}
 
-/**
- * Get Formatted string of cookie Referral
- *
- * @param cookie_obj Object with cookie referral params {source, medium, campaign}
- *
- * @return string Formatted string of Referral
- */
-function attrToString(cookie_obj) {
-    if (cookie_obj.source == 'direct') {
+// Write the traffic source to a cookie
+function writeCookie(cookieName) {
+    const trafficSource = getTrafficSource(cookieName, hostname);
+    const formattedTrafficSource = unescape(trafficSource.replace(/\|{2,}/g, "|").replace(/^\|/, ""));
+
+    setCookie(cookieName, formattedTrafficSource, 182, "/", "", "");
+}
+
+// Read a traffic source cookie and return an object
+function readCookie(cookieName) {
+    const cookieString = parseCookies()[cookieName];
+    let cookieObj = {};
+
+    for (let param of cookieParams) {
+        cookieObj[param] = getQueryParam('?' + decodeURIComponent(cookieString), param);
+    }
+
+    return cookieObj;
+}
+
+// Convert a traffic source object to a string
+function trafficSourceToString(cookieObj) {
+    if (cookieObj.source === 'direct') {
         return 'direct';
     } else {
-        // open with brackets
-        var attr_value = cookie_obj.source + ' (' + cookie_obj.medium;
-
-        // add campaign name if exist
-        if (cookie_obj.campaign.length > 1) {
-            attr_value = attr_value + ' | ' + cookie_obj.campaign;
+        let attrValue = `${cookieObj.source} (${cookieObj.medium}`;
+        if (cookieObj.campaign.length > 1) {
+            attrValue += ` | ${cookieObj.campaign}`;
         }
-
-        // close brackets
-        attr_value = attr_value + ')';
+        if (cookieObj.term.length > 1) {
+            attrValue += ` | ${cookieObj.term}`;
+        }
+        attrValue += ')';
+        return attrValue;
     }
-
-    // return string
-    return attr_value;
 }
 
-/**
- * Get value of url query string param "?param=value"
- *
- * @param s Url query string "?parma=value"
- * @param q The param to retrieve
- *
- * @return {string} param value
- */
-function getParam(s, q) {
+// Get a specific query parameter from a URL
+function getQueryParam(url, paramName) {
     try {
-        var match = s.match('[?&]' + q + '=([^&]+)');
+        const match = url.match('[?&]' + paramName + '=([^&]+)');
         return match ? match[1] : '';
-        // return s.match(RegExp('(^|&)'+q+'=([^&]*)'))[2];
-    } catch(e) {
+    } catch (e) {
         return '';
     }
 }
 
+// Calculate traffic source based on current URL and referrer
 function calculateTrafficSource() {
-    var source='', medium='', campaign=''; //, term='', content='';
-    var search_engines = [['bing', 'q'], ['google', 'q'], ['duckduckgo', 'q'], ['yahoo', 'q'], ['baidu', 'q'], ['yandex', 'q'], ['ask', 'q'], ['libero.it', 'qs'], ['virgilio.it', 'q']]; //List of search engines
-    var socials = [['facebook'], ['twitter'], ['instagram'], ['flickr'], ['tumblr'], ['vimeo'], ['pinterest']]; // List of socials ['plus.google'], ['plus.url.google'],
-    var ref = document.referrer;
-    ref = ref.substr(ref.indexOf('//')+2);
-    var ref_domain = ref;
-        // ref_path = '/', no need
-        // ref_search = ''; no need
+    const searchEngines = [['bing', 'q'], ['google', 'q'], ['duckduckgo', 'q'], ['yahoo', 'q'], ['baidu', 'q'], ['yandex', 'q']];
+    const socials = [['facebook'], ['twitter'], ['instagram'], ['pinterest'], ['youtube'], ['tiktok']];
+    const ref = document.referrer.substr(document.referrer.indexOf('//') + 2);
+    let refDomain = ref;
+    let trafficSources = { source: '', medium: '', campaign: '', term: '' };
+    const urlSearch = document.location.search;
 
-    // Checks for campaign parameters
-    var url_search = document.location.search;
-
-    // console.log(url_search.indexOf('utm_source'));
-    // console.log(getParam(url_search, 'gclid'));
-    // console.log(url_search);
-
-    if(url_search.indexOf('utm_source') > -1) {
-        source   = getParam(url_search, 'utm_source');
-        medium   = getParam(url_search, 'utm_medium');
-        campaign = getParam(url_search, 'utm_campaign');
-        // term     = getParam(url_search, 'utm_term'); no need
-        // content  = getParam(url_search, 'utm_content'); no need
-    }
-    else if (getParam(url_search, 'gclid')) {
-        source = 'google';
-        medium = 'cpc';
-        campaign = 'gclid';
-    }
-    else if(ref) {
-        // separate domain, path and query parameters
+    // Determine the source of the traffic
+    if (urlSearch.indexOf('utm_source') > -1) {
+        trafficSources.source = getQueryParam(urlSearch, 'utm_source');
+        trafficSources.medium = getQueryParam(urlSearch, 'utm_medium');
+        trafficSources.campaign = getQueryParam(urlSearch, 'utm_campaign');
+        trafficSources.term = '';
+    } else if (getQueryParam(urlSearch, 'gclid')) {
+        trafficSources.source = 'google';
+        trafficSources.medium = 'cpc';
+        trafficSources.campaign = 'gclid';
+        trafficSources.term = '';
+    } else if (ref) {
         if (ref.indexOf('/') > -1) {
-            ref_domain = ref.substr(0,ref.indexOf('/'));
-            // ref_path = ref.substr(ref.indexOf('/')); no need
-            /* no need if (ref_path.indexOf('?') > -1) {
-                ref_search = ref_path.substr(ref_path.indexOf('?')+1);
-                ref_path = ref_path.substr(0, ref_path.indexOf('?'));
-            }*/
+            refDomain = ref.substr(0, ref.indexOf('/'));
         }
-        medium = 'referral';
-        source = ref_domain;
-        // Extract term for organic source
-        for (var i=0; i<search_engines.length; i++){
-            if(ref_domain.indexOf(search_engines[i][0]) > -1){
-                medium = 'organic';
-                source = search_engines[i][0];
-                // term = getParam(ref_search, search_engines[i][1]) || '(not provided)'; no need
+
+        trafficSources.medium = 'referral';
+        trafficSources.source = refDomain;
+
+        for (let engine of searchEngines) {
+            if (refDomain.includes(engine[0])) {
+                trafficSources.medium = 'organic';
+                trafficSources.source = engine[0];
+                trafficSources.term = getQueryParam(document.referrer, engine[1]) || '';
                 break;
             }
         }
-        // Or of social
-        for (var i=0; i<socials.length; i++){
-            if (ref_domain.indexOf(socials[i][0]) > -1) {
-                medium = 'social';
-                source = socials[i][0];
+
+        for (let social of socials) {
+            if (refDomain.includes(social[0])) {
+                trafficSources.medium = 'social';
+                trafficSources.source = social[0];
                 break;
             }
         }
     }
 
-    return {
-        'source'  : source,
-        'medium'  : medium,
-        'campaign': campaign
-    }; // 'term'    : term, 'content' : content
+    return trafficSources;
 }
 
+// Build a traffic source string based on the calculated traffic source
 function getTrafficSource(cookieName, hostname) {
-    var trafficSources = calculateTrafficSource();
-    var source = trafficSources.source.length === 0 ? 'direct' : trafficSources.source;
-    var medium = trafficSources.medium.length === 0 ? 'none' : trafficSources.medium;
-    var campaign = trafficSources.campaign.length === 0 ? 'direct' : trafficSources.campaign;
-    // exception
-    if(medium === 'referral') {
-        campaign = '';
-    }
-    // var rightNow = new Date(); no need date
-    var value = 'source='   + source +
-        '&medium='  + medium +
-        '&campaign='+ campaign;
-    // '&term='    + trafficSources.term +
-    // '&content=' + trafficSources.content +
-    // + '&date='    + rightNow.toISOString().slice(0,10).replace(/-/g,""); no need date
+    const trafficSources = calculateTrafficSource();
+    const source = trafficSources.source || 'direct';
+    const medium = trafficSources.medium || 'none';
+    const campaign = (medium === 'referral') ? '' : (trafficSources.campaign || 'direct');
+    const term = trafficSources.term || '';
+
+    const value = `source=${source}&medium=${medium}&campaign=${campaign}&term=${term}`;
     return value;
 }
 
-// Self-invoking function
-(function(){
-    // no need date
-    // var date = new Date();
-    // var fr_date = date.getUTCFullYear().toString() + ((date.getUTCMonth() < 9) ? '0' + (date.getUTCMonth()+1).toString() : (date.getUTCMonth()+1).toString()) + ((date.getUTCDate() < 10) ? '0' + date.getUTCDate().toString() : date.getUTCDate().toString());
+// Create and log traffic source cookies
+(function () {
+    const session = parseCookies('js_referral');
 
-    var session = crumbleCookie()['js_referral'];
-
-    // First time session
-    if (typeof session == 'undefined')
-    {
-        writeLogic('js_referral');
+    if (!session) {
+        writeCookie('js_referral');
     } else {
-        writeLogic('js_referral_returned');
+        writeCookie('js_referral_returned');
     }
 })();
 
-var session = readLogic('js_referral'),
-    session2 = readLogic('js_referral_returned');
+const firstVisitSession = readCookie('js_referral');
+const returnedVisitSession = readCookie('js_referral_returned');
 
-// First time session (only the first time visit)
-if (typeof session != 'undefined') {
-    console.log(session); // object {source, medium, campaign}
-    console.info(attrToString(session)); // or formatted string "source (medium | campaign)"
-}
-// Last time session (ever the last time visit)
-if (typeof session2 != 'undefined') {
-    console.info(session2); // object {source, medium, campaign}
-    console.info(attrToString(session2)); // or formatted string "source (medium | campaign)"
+if (firstVisitSession) {
+    console.log(firstVisitSession);
+    console.info(trafficSourceToString(firstVisitSession));
 }
 
-var utmSourceFirstVisit = String(session.source);
-var utmMediumFirstVisit = String(session.medium);
-var utmCampaignFirstVisit = String(session.campaign);
+if (returnedVisitSession) {
+    console.info(returnedVisitSession);
+    console.info(trafficSourceToString(returnedVisitSession));
+}
+
+const utmSourceFirstVisit = String(firstVisitSession.source);
+const utmMediumFirstVisit = String(firstVisitSession.medium);
+const utmCampaignFirstVisit = String(firstVisitSession.campaign);
+const searchQueryFirstVisit = String(firstVisitSession.term);
