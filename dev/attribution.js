@@ -1,4 +1,3 @@
-// Attribution Tracker Class (all the class code from before goes here)
 class AttributionTracker {
   constructor(options = {}) {
     // Configuration with defaults
@@ -90,8 +89,11 @@ class AttributionTracker {
 
     // Initialize storage
     this.initializeStorage();
-  }
 
+    // Initialize page tracking
+    this.currentSessionPages = [];
+    this.initializePageTracking();
+  }
   initializeStorage() {
     try {
       if (typeof localStorage !== 'undefined') {
@@ -104,6 +106,39 @@ class AttributionTracker {
       console.warn('Error initializing storage:', e);
       this.storage = new Map();
     }
+  }
+
+  initializePageTracking() {
+    // Track initial page
+    this.addPageToSession(window.location.pathname);
+
+    // Track SPA navigation
+    window.addEventListener('popstate', () => {
+      this.addPageToSession(window.location.pathname);
+    });
+
+    // Monitor pushState
+    const originalPushState = history.pushState;
+    history.pushState = function() {
+      originalPushState.apply(this, arguments);
+      this.addPageToSession(window.location.pathname);
+    }.bind(this);
+  }
+
+  addPageToSession(pathname) {
+    this.currentSessionPages.push(pathname);
+    // Update session data
+    const sessionData = this.getSessionData();
+    sessionData.pagesViewed = this.currentSessionPages;
+  }
+
+  getJourneyStory() {
+    const currentTouch = this.createCurrentTouch();
+    const paths = this.currentSessionPages
+      .filter(Boolean)
+      .filter((path, index, array) => array.indexOf(path) === index);
+
+    return `Pages viewed in converting session (${currentTouch.source}/${currentTouch.medium}): ${paths.join(' > ')}`;
   }
 
   getAttributionData() {
@@ -120,14 +155,14 @@ class AttributionTracker {
         allTouches: updatedTouches,
         touchCount: updatedTouches.length,
         deviceInfo: this.getDeviceInfo(),
-        sessionData: this.getSessionData()
+        sessionData: this.getSessionData(),
+        journeyStory: this.getJourneyStory()
       };
     } catch (error) {
       console.error('Error getting attribution data:', error);
       return this.createEmptyAttribution();
     }
   }
-
   createCurrentTouch() {
     const urlParams = new URLSearchParams(window.location.search);
     const referrer = document.referrer;
@@ -138,7 +173,7 @@ class AttributionTracker {
       medium: this.determineMedium(utmParams.medium),
       timestamp: new Date().toISOString(),
       referrer: referrer,
-      landingPage: window.location.href,
+      landingPage: window.location.pathname,  // Changed from href to pathname
       utmParameters: utmParams,
       campaignData: this.analyzeCampaignData(utmParams),
       customParameters: this.extractCustomParameters(urlParams)
@@ -196,12 +231,11 @@ class AttributionTracker {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
     };
   }
-
   getSessionData() {
     return {
       id: this.generateSessionId(),
       startTime: new Date().toISOString(),
-      pagesViewed: [window.location.pathname],
+      pagesViewed: this.currentSessionPages,  // Now using tracked pages
       lastActivity: new Date().toISOString()
     };
   }
@@ -269,7 +303,6 @@ class AttributionTracker {
             return platform;
           }
         }
-        
         for (const [engine, config] of Object.entries(this.searchEngines)) {
           if (config.domains.some(domain => referrerDomain.includes(domain)) ||
               config.patterns.some(pattern => pattern.test(referrerDomain))) {
@@ -331,7 +364,6 @@ class AttributionTracker {
       category: this.determineContentCategory(content)
     };
   }
-
   determineContentCategory(content) {
     if (!content) return 'unknown';
     
@@ -350,7 +382,8 @@ class AttributionTracker {
       allTouches: [],
       touchCount: 0,
       deviceInfo: this.getDeviceInfo(),
-      sessionData: this.getSessionData()
+      sessionData: this.getSessionData(),
+      journeyStory: ''
     };
   }
 }
